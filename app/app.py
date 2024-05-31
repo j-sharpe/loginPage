@@ -14,7 +14,7 @@ def index():
     hashed_password = (bcrypt.generate_password_hash
                        (password).decode('utf-8'))
     is_valid = (bcrypt.check_password_hash
-                (hashed_password, pw_for_false))
+                (hashed_password, password))
 
     return render_template('base.html',
                     hashedpassword=hashed_password,
