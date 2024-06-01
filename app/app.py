@@ -11,17 +11,44 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def check_user_exists():
+    user_email = request.form.get('userEmail', '')
+
+    conn = get_db_connection()
+    user_exists_cursor = conn.execute('SELECT EXISTS (SELECT 1 FROM user_credentials WHERE email = ?)', (user_email,))
+    user_exists = user_exists_cursor.fetchone()[0]
+
+    conn.commit()
+    conn.close()
+    return user_exists
+
+def check_password():
+    user_email = request.form.get('userEmail', '')
+    userPassword = request.form.get('userPassword', '')
+
+    conn = get_db_connection()
+    stored_pw_cursor = conn.execute('SELECT password FROM user_credentials WHERE email = ?',
+                                    (user_email,))
+    stored_pw = stored_pw_cursor.fetchone()[0]
+
+    hashIsHash = bcrypt.check_password_hash(stored_pw, userPassword)
+    conn.commit()
+    conn.close()
+
+    return hashIsHash
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     #Hashes password and checks that hashed pw is valid for a given password
 
     if request.method == "POST":
-        user_email = request.form.get('userEmail', '')
-        userPassword = request.form.get('userPassword', '')
+        #user_email = request.form.get('userEmail', '')
+        #userPassword = request.form.get('userPassword', '')
 
-        conn = get_db_connection()
-        user_exists_cursor = conn.execute('SELECT EXISTS (SELECT 1 FROM user_credentials WHERE email = ?)', (user_email,))
-        user_exists = user_exists_cursor.fetchone()[0]
+        #conn = get_db_connection()
+        #user_exists_cursor = conn.execute('SELECT EXISTS (SELECT 1 FROM user_credentials WHERE email = ?)', (user_email,))
+        #user_exists = user_exists_cursor.fetchone()[0]
+        user_exists = check_user_exists()
 
         #conn.commit()
         #conn.close()
@@ -30,16 +57,17 @@ def index():
             flash("No Account Linked to this Email. Please sign-up for an account.")
             return render_template('base.html', userExists=user_exists)
 
-        stored_pw_cursor = conn.execute('SELECT password FROM user_credentials WHERE email = ?',
-                                 (user_email,))
-        stored_pw = stored_pw_cursor.fetchone()[0]
+        #stored_pw_cursor = conn.execute('SELECT password FROM user_credentials WHERE email = ?',
+        #                         (user_email,))
+        #stored_pw = stored_pw_cursor.fetchone()[0]
 
-        hashIsHash = bcrypt.check_password_hash(stored_pw, userPassword)
+        #hashIsHash = bcrypt.check_password_hash(stored_pw, userPassword)
 
         #pwForTest = bcrypt.generate_password_hash("abcd1234").decode('utf-8')
 
-        conn.commit()
-        conn.close()
+        #conn.commit()
+        #conn.close()
+        hashIsHash = check_password()
 
         return render_template('base.html', userExists=hashIsHash)
 
