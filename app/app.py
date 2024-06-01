@@ -17,20 +17,31 @@ def index():
 
     if request.method == "POST":
         user_email = request.form.get('userEmail', '')
-
-        #userPassword = request.form.get('userPassword', '')
+        userPassword = request.form.get('userPassword', '')
 
         conn = get_db_connection()
-        cursor = conn.execute('SELECT EXISTS (SELECT 1 FROM user_credentials WHERE email = ?)', (user_email,))
-        user_exists = cursor.fetchone()[0]
+        user_exists_cursor = conn.execute('SELECT EXISTS (SELECT 1 FROM user_credentials WHERE email = ?)', (user_email,))
+        user_exists = user_exists_cursor.fetchone()[0]
+
+        #conn.commit()
+        #conn.close()
+
+        if user_exists == 0:
+            flash("No Account Linked to this Email. Please sign-up for an account.")
+            return render_template('base.html', userExists=user_exists)
+
+        stored_pw_cursor = conn.execute('SELECT password FROM user_credentials WHERE email = ?',
+                                 (user_email,))
+        stored_pw = stored_pw_cursor.fetchone()[0]
+
+        hashIsHash = bcrypt.check_password_hash(stored_pw, userPassword)
+
+        #pwForTest = bcrypt.generate_password_hash("abcd1234").decode('utf-8')
 
         conn.commit()
         conn.close()
 
-        if user_exists == 0:
-            flash("No Account Linked to this Email. Please sign-up for an account.")
-
-        return render_template('base.html', userExists=user_exists)
+        return render_template('base.html', userExists=hashIsHash)
 
     return render_template('base.html', userExists="unknown")
 
