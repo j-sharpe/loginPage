@@ -13,8 +13,8 @@
         <input type="text" name="userEmail" placeholder="Email"><br><br>
         <input type="password" name="userPassword" placeholder="Password"><br><br>
         <input type="submit" value="Submit">
-    </form>
-
+    </form><br>
+    <a href="{{ url_for('new_account') }}">Create Account</a>
     <p>Does user exist (boolean): {{TestLogic}}</p>
 </body>
 </html>

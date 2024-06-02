@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Account</title>
+</head>
+<body>
+    <h1>Create Account</h1>
+    {% for message in get_flashed_messages() %}
+        <div class="alert">{{ message }}</div>
+    {% endfor %}
+    <form action="" method="post">
+        <label for="newAcctEmail">Enter Email:</label><br>
+        <input type="text" id="newAcctEmail"name="userEmail" placeholder="Email"><br><br>
+        <label for="newAcctPassword">Enter New Password:</label><br>
+        <input type="password" id="newAcctPassword" name="userPassword" placeholder="Enter New Password"><br><br>
+        <label for="confirmPassword">Confirm New Password:</label><br>
+        <input type="password" id="confirmPassword"name="userPassword" placeholder="Confirm Password"><br><br>
+        <input type="submit" value="Submit">
+    </form><br>
+</body>
+</html>
