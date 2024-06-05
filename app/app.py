@@ -1,11 +1,23 @@
-from flask import Flask, render_template, request, flash, redirect, url_for, session, escape
+from flask import Flask, render_template, request, flash, redirect, url_for, session
+from flask_session import Session
+from cachelib import FileSystemCache
 from flask_bcrypt import Bcrypt
 from email_validator import validate_email, EmailNotValidError
+from twilio.rest import Client
 import sqlite3, os
+
 
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
+app.config['SESSION_TYPE'] = 'cachelib'
+app.config['SESSION_CACHELIB'] = FileSystemCache(cache_dir='flask_session_cache', threshold=500)
+app.config.from_object(__name__)
 app.config['SECRET_KEY'] = os.urandom(24).hex()
+server_session = Session(app)
+
+account_sid = os.environ['TWILIO_ACCOUNT_SID']
+auth_token = os.environ['TWILIO_AUTH_TOKEN']
+client = Client(account_sid, auth_token)
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -50,6 +62,7 @@ def index():
 
 @app.route('/welcome')
 def welcome():
+    print(session)
     if session.get('email') == None:
         flash("Please Login to view other pages.")
         return redirect(url_for('index'))
@@ -61,9 +74,17 @@ def logout():
     session.pop('email')
     return redirect(url_for('index'))
 
-@app.route('/new-account')
-def new_account():
-    return render_template('createAccount.html')
+@app.route('/verify-new-user', methods = ['POST', 'GET'])
+def verify_new_user():
+    if request.method == 'POST':
+        verification = client.verify\
+                            .v2\
+                            .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19')\
+                            .verifications\
+                            .create(to=request.form.get('newAcctEmail'), channel='email')
+        print(verification)
+
+    return render_template('verifyNewUser.html')
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
