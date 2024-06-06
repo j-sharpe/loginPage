@@ -76,13 +76,52 @@ def logout():
 
 @app.route('/verify-new-user', methods = ['POST', 'GET'])
 def verify_new_user():
+
     if request.method == 'POST':
+
+        try:
+            email_info = validate_email(request.form.get('newAcctEmail', ''), check_deliverability=False)
+        except EmailNotValidError as e:
+            print(str(e))
+            flash("Invalid Email Address.")
+            return redirect(url_for('verify_new_user'))
+
+        #Check that normalized email already in db --> shows user has account
+        user_exists = check_user_exists(email_info.normalized)
+
+        #Handle nonexisting user
+        if user_exists == 1:
+            flash("An account is already linked to this email. Please login.")
+            return redirect(url_for('verify_new_user'))
+
+
         verification = client.verify\
                             .v2\
                             .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19')\
                             .verifications\
-                            .create(to=request.form.get('newAcctEmail'), channel='email')
+                            .create(channel_configuration={
+                                'substitutions': {
+                                    'localhost': 'http://127.0.0.1:5000',
+                                    'verify_code_url': '/verify-code'
+                                }
+                            }, to=request.form.get('newAcctEmail'), channel='email')
         print(verification)
+        session['newEmail'] = request.form.get('newAcctEmail')
+        print(session)
+    return render_template('verifyNewUser.html')
+
+@app.route('/verify-code<code>')
+def verify_code(code):
+    newEmail = session.get('newEmail')
+    verification_checks = client.verify \
+                        .v2 \
+                        .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
+                        .verification_checks \
+                        .create(to=newEmail, code=code)
+
+
+    if verification_checks.status == "approved":
+        print ("approved")
 
     return render_template('verifyNewUser.html')
 
