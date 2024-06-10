@@ -121,9 +121,15 @@ def verify_code(code):
 
 
     if verification_checks.status == "approved":
+        return redirect(url_for('create_password'))
         print ("approved")
 
-    return render_template('verifyNewUser.html')
+    return render_template('verifyFailed.html')
+
+
+@app.route('/create-password')
+def create_password():
+    return render_template('createPassword.html')
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
