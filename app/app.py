@@ -106,7 +106,8 @@ def verify_new_user():
                                 }
                             }, to=request.form.get('newAcctEmail'), channel='email')
         print(verification)
-        session['newEmail'] = request.form.get('newAcctEmail')
+        session['newEmail'] = email_info.normalized
+        #request.form.get('newAcctEmail')
         print(session)
     return render_template('verifyNewUser.html')
 
@@ -121,14 +122,40 @@ def verify_code(code):
 
 
     if verification_checks.status == "approved":
+        print("approved")
         return redirect(url_for('create_password'))
-        print ("approved")
 
     return render_template('verifyFailed.html')
 
 
-@app.route('/create-password')
+@app.route('/create-password', methods=['GET', 'POST'])
 def create_password():
+
+    if request.method == "POST":
+        new_password = request.form.get('newAcctPW')
+        confirmed_password = request.form.get('confirmNewAcctPW')
+
+        if confirmed_password == new_password:
+            #flash("Valid Password")
+            try:
+                #Get normalized email from session
+                newEmail = session['newEmail']
+                #Hash new password
+                hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+                #Use SQL (parameterized) to create new entry in user db (email, hashed pw)
+                conn = get_db_connection()
+                conn.execute('INSERT INTO user_credentials (email, password) VALUES (?, ?)',
+                             (newEmail, hashed_password))
+                conn.commit()
+                conn.close()
+            except sqlite3.IntegrityError as e:
+                print(e)
+                return
+            #redirect to login page
+            return redirect(url_for('index'))
+        else:
+            flash("Passwords don't match")
+
     return render_template('createPassword.html')
 
 def get_db_connection():
@@ -162,4 +189,5 @@ def check_password():
     conn.close()
 
     return password_is_valid
+
 
