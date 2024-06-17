@@ -46,7 +46,7 @@ def index():
             flash("Incorrect Password.")
             return render_template('base.html', TestLogic=validate_password)
 
-        session['email'] = request.form.get('userEmail', '')
+        session['user'] = request.form.get('userEmail', '')
         return redirect(url_for('welcome'))
 
     return render_template('base.html', TestLogic="unknown")
@@ -54,15 +54,15 @@ def index():
 @app.route('/welcome')
 def welcome():
     print(session)
-    if session.get('email') == None:
+    if session.get('user') == None:
         flash("Please Login to view other pages.")
         return redirect(url_for('index'))
-    return render_template('welcome.html', EMail=session['email'])
+    return render_template('welcome.html', User=session['user'])
 
 @app.route('/logout')
 def logout():
     flash("You have been logged out.")
-    session.pop('email')
+    session.pop('user')
     return redirect(url_for('index'))
 
 @app.route('/verify-new-user', methods = ['POST', 'GET'])
@@ -71,7 +71,7 @@ def verify_new_user():
     if request.method == 'POST':
 
         try:
-            email_info = validate_email(request.form.get('newAcctEmail', ''), check_deliverability=False)
+            email_info = validate_email(request.form.get('acctEmail', ''), check_deliverability=False)
         except EmailNotValidError as e:
             print(str(e))
             flash("Invalid Email Address.")
@@ -92,21 +92,55 @@ def verify_new_user():
                                     'localhost': 'http://127.0.0.1:5000',
                                     'verify_code_url': '/verify-code'
                                 }
-                            }, to=request.form.get('newAcctEmail'), channel='email')
-        print(verification)
-        session['newEmail'] = email_info.normalized
+                            }, to=request.form.get('acctEmail'), channel='email')
+        #print(verification)
+        session['email'] = email_info.normalized
         #request.form.get('newAcctEmail')
-        print(session)
-    return render_template('verifyNewUser.html')
+        #print(session)
+    return render_template('verifyUser.html', appService="Create User")
+
+
+@app.route("/verify-current-user", methods=["POST", "GET"])
+def verify_current_user():
+
+    if request.method == 'POST':
+
+        try:
+            email_info = validate_email(request.form.get('acctEmail', ''), check_deliverability=False)
+        except EmailNotValidError as e:
+            print(str(e))
+            flash("Invalid Email Address.")
+            return redirect(url_for('verify_current_user'))
+
+        user_exists = check_user_exists(email_info.normalized)
+
+        if user_exists == 0:
+            flash("No account linked with this email. Please create a new account.")
+            return redirect(url_for('verify_current_user'))
+
+        verification = client.verify \
+            .v2 \
+            .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
+            .verifications \
+            .create(channel_configuration={
+            'substitutions': {
+                'localhost': 'http://127.0.0.1:5000',
+                'verify_code_url': '/verify-code'
+            }
+        }, to=request.form.get('acctEmail'), channel='email')
+
+        session['email'] = email_info.normalized
+
+    return render_template('verifyUser.html', appService="Verify User To Update Password")
 
 @app.route('/verify-code<code>')
 def verify_code(code):
-    newEmail = session.get('newEmail')
+    toEmail = session.get('email')
     verification_checks = client.verify \
                         .v2 \
                         .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
                         .verification_checks \
-                        .create(to=newEmail, code=code)
+                        .create(to=toEmail, code=code)
 
 
     if verification_checks.status == "approved":
@@ -124,13 +158,9 @@ def create_password():
         confirmed_password = request.form.get('confirmNewAcctPW')
 
         if confirmed_password == new_password:
-            #flash("Valid Password")
             try:
-                #Get normalized email from session
-                newEmail = session['newEmail']
-                #Hash new password
+                newEmail = session['email']
                 hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
-                #Use SQL (parameterized) to create new entry in user db (email, hashed pw)
                 conn = get_db_connection()
                 conn.execute('INSERT INTO user_credentials (email, password) VALUES (?, ?)',
                              (newEmail, hashed_password))
@@ -139,8 +169,8 @@ def create_password():
             except sqlite3.IntegrityError as e:
                 print(e)
                 return
-            #redirect to login page
-            session.pop('newEmail')
+
+            session.pop('email')
             return redirect(url_for('index'))
         else:
             flash("Passwords don't match")
