@@ -22,7 +22,7 @@ client = Client(account_sid, auth_token)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    if session.get('email') != None:
+    if session.get('user') != None:
         return redirect(url_for('welcome'))
 
     if request.method == "POST":
@@ -90,7 +90,8 @@ def verify_new_user():
                             .create(channel_configuration={
                                 'substitutions': {
                                     'localhost': 'http://127.0.0.1:5000',
-                                    'verify_code_url': '/verify-code'
+                                    'verify_code_url': '/new-user-code',
+                                    'action_item': 'Creating Your Account!'
                                 }
                             }, to=request.form.get('acctEmail'), channel='email')
         #print(verification)
@@ -125,16 +126,17 @@ def verify_current_user():
             .create(channel_configuration={
             'substitutions': {
                 'localhost': 'http://127.0.0.1:5000',
-                'verify_code_url': '/verify-code'
+                'verify_code_url': '/update-user-code',
+                'action_item': 'Updating your Password!'
             }
         }, to=request.form.get('acctEmail'), channel='email')
 
         session['email'] = email_info.normalized
-
+        print(verification)
     return render_template('verifyUser.html', appService="Verify User To Update Password")
 
-@app.route('/verify-code<code>')
-def verify_code(code):
+@app.route('/new-user-code<code>')
+def new_user_code(code):
     toEmail = session.get('email')
     verification_checks = client.verify \
                         .v2 \
@@ -149,6 +151,22 @@ def verify_code(code):
 
     return render_template('verifyFailed.html')
 
+
+@app.route('/update-user-code<code>')
+def update_user_code(code):
+    toEmail = session.get('email')
+    verification_checks = client.verify \
+                        .v2 \
+                        .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
+                        .verification_checks \
+                        .create(to=toEmail, code=code)
+
+
+    if verification_checks.status == "approved":
+        print("approved")
+        return redirect(url_for('change_password'))
+
+    return render_template('verifyFailed.html')
 
 @app.route('/create-password', methods=['GET', 'POST'])
 def create_password():
@@ -176,6 +194,12 @@ def create_password():
             flash("Passwords don't match")
 
     return render_template('createPassword.html')
+
+
+@app.route('/change-password')
+def change_password():
+    return render_template('changePassword.html')
+
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
