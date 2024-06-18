@@ -177,11 +177,11 @@ def create_password():
 
         if confirmed_password == new_password:
             try:
-                newEmail = session['email']
+                new_email = session['email']
                 hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
                 conn = get_db_connection()
                 conn.execute('INSERT INTO user_credentials (email, password) VALUES (?, ?)',
-                             (newEmail, hashed_password))
+                             (new_email, hashed_password))
                 conn.commit()
                 conn.close()
             except sqlite3.IntegrityError as e:
@@ -191,13 +191,32 @@ def create_password():
             session.pop('email')
             return redirect(url_for('index'))
         else:
-            flash("Passwords don't match")
+            flash("Passwords don't match.")
 
     return render_template('createPassword.html')
 
 
-@app.route('/change-password')
+@app.route('/change-password', methods=["POST", "GET"])
 def change_password():
+
+    if request.method == "POST":
+        updated_password = request.form.get('updatedAcctPW')
+        confirmed_password = request.form.get('confirmUpdatedAcctPW')
+
+        if confirmed_password == updated_password:
+            user_email = session['email']
+            hashed_password = bcrypt.generate_password_hash(updated_password).decode('utf-8')
+            conn = get_db_connection()
+            conn.execute('UPDATE user_credentials SET password = ? WHERE email = ?',
+                         (hashed_password, user_email ))
+            conn.commit()
+            conn.close()
+
+            session.pop('email')
+            return redirect(url_for('index'))
+        else:
+            flash("Passwords don't match.")
+
     return render_template('changePassword.html')
 
 
