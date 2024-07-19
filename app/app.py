@@ -22,7 +22,7 @@ client = Client(account_sid, auth_token)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    if session.get('email') != None:
+    if session.get('user') != None:
         return redirect(url_for('welcome'))
 
     if request.method == "POST":
@@ -46,7 +46,7 @@ def index():
             flash("Incorrect Password.")
             return render_template('base.html', TestLogic=validate_password)
 
-        session['email'] = request.form.get('userEmail', '')
+        session['user'] = request.form.get('userEmail', '')
         return redirect(url_for('welcome'))
 
     return render_template('base.html', TestLogic="unknown")
@@ -54,15 +54,15 @@ def index():
 @app.route('/welcome')
 def welcome():
     print(session)
-    if session.get('email') == None:
+    if session.get('user') == None:
         flash("Please Login to view other pages.")
         return redirect(url_for('index'))
-    return render_template('welcome.html', EMail=session['email'])
+    return render_template('welcome.html', User=session['user'])
 
 @app.route('/logout')
 def logout():
     flash("You have been logged out.")
-    session.pop('email')
+    session.pop('user')
     return redirect(url_for('index'))
 
 @app.route('/verify-new-user', methods = ['POST', 'GET'])
@@ -71,7 +71,7 @@ def verify_new_user():
     if request.method == 'POST':
 
         try:
-            email_info = validate_email(request.form.get('newAcctEmail', ''), check_deliverability=False)
+            email_info = validate_email(request.form.get('acctEmail', ''), check_deliverability=False)
         except EmailNotValidError as e:
             print(str(e))
             flash("Invalid Email Address.")
@@ -90,23 +90,59 @@ def verify_new_user():
                             .create(channel_configuration={
                                 'substitutions': {
                                     'localhost': 'http://127.0.0.1:5000',
-                                    'verify_code_url': '/verify-code'
+                                    'verify_code_url': '/new-user-code',
+                                    'action_item': 'Creating Your Account!'
                                 }
-                            }, to=request.form.get('newAcctEmail'), channel='email')
-        print(verification)
-        session['newEmail'] = email_info.normalized
+                            }, to=request.form.get('acctEmail'), channel='email')
+        #print(verification)
+        session['email'] = email_info.normalized
         #request.form.get('newAcctEmail')
-        print(session)
-    return render_template('verifyNewUser.html')
+        #print(session)
+    return render_template('verifyUser.html', appService="Create User")
 
-@app.route('/verify-code<code>')
-def verify_code(code):
-    newEmail = session.get('newEmail')
+
+@app.route("/verify-current-user", methods=["POST", "GET"])
+def verify_current_user():
+
+    if request.method == 'POST':
+
+        try:
+            email_info = validate_email(request.form.get('acctEmail', ''), check_deliverability=False)
+        except EmailNotValidError as e:
+            print(str(e))
+            flash("Invalid Email Address.")
+            return redirect(url_for('verify_current_user'))
+
+        user_exists = check_user_exists(email_info.normalized)
+
+        if user_exists == 0:
+            flash("No account linked with this email. Please create a new account.")
+            return redirect(url_for('verify_current_user'))
+
+        verification = client.verify \
+            .v2 \
+            .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
+            .verifications \
+            .create(channel_configuration={
+            'substitutions': {
+                'localhost': 'http://127.0.0.1:5000',
+                'verify_code_url': '/update-user-code',
+                'action_item': 'Updating your Password!'
+            }
+        }, to=request.form.get('acctEmail'), channel='email')
+
+        session['email'] = email_info.normalized
+        print(verification)
+    return render_template('verifyUser.html', appService="Verify User To Update Password")
+
+@app.route('/new-user-code<code>')
+def new_user_code(code):
+    toEmail = session.get('email')
     verification_checks = client.verify \
                         .v2 \
                         .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
                         .verification_checks \
-                        .create(to=newEmail, code=code)
+                        .create(to=toEmail, code=code)
 
 
     if verification_checks.status == "approved":
@@ -116,6 +152,22 @@ def verify_code(code):
     return render_template('verifyFailed.html')
 
 
+@app.route('/update-user-code<code>')
+def update_user_code(code):
+    toEmail = session.get('email')
+    verification_checks = client.verify \
+                        .v2 \
+                        .services('VA4f40ef1d760fc1d05ae1f3b5fec96f19') \
+                        .verification_checks \
+                        .create(to=toEmail, code=code)
+
+
+    if verification_checks.status == "approved":
+        print("approved")
+        return redirect(url_for('change_password'))
+
+    return render_template('verifyFailed.html')
+
 @app.route('/create-password', methods=['GET', 'POST'])
 def create_password():
 
@@ -124,28 +176,49 @@ def create_password():
         confirmed_password = request.form.get('confirmNewAcctPW')
 
         if confirmed_password == new_password:
-            #flash("Valid Password")
             try:
-                #Get normalized email from session
-                newEmail = session['newEmail']
-                #Hash new password
+                new_email = session['email']
                 hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
-                #Use SQL (parameterized) to create new entry in user db (email, hashed pw)
                 conn = get_db_connection()
                 conn.execute('INSERT INTO user_credentials (email, password) VALUES (?, ?)',
-                             (newEmail, hashed_password))
+                             (new_email, hashed_password))
                 conn.commit()
                 conn.close()
             except sqlite3.IntegrityError as e:
                 print(e)
                 return
-            #redirect to login page
-            session.pop('newEmail')
+
+            session.pop('email')
             return redirect(url_for('index'))
         else:
-            flash("Passwords don't match")
+            flash("Passwords don't match.")
 
     return render_template('createPassword.html')
+
+
+@app.route('/change-password', methods=["POST", "GET"])
+def change_password():
+
+    if request.method == "POST":
+        updated_password = request.form.get('updatedAcctPW')
+        confirmed_password = request.form.get('confirmUpdatedAcctPW')
+
+        if confirmed_password == updated_password:
+            user_email = session['email']
+            hashed_password = bcrypt.generate_password_hash(updated_password).decode('utf-8')
+            conn = get_db_connection()
+            conn.execute('UPDATE user_credentials SET password = ? WHERE email = ?',
+                         (hashed_password, user_email ))
+            conn.commit()
+            conn.close()
+
+            session.pop('email')
+            return redirect(url_for('index'))
+        else:
+            flash("Passwords don't match.")
+
+    return render_template('changePassword.html')
+
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
